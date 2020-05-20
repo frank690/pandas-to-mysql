@@ -14,6 +14,8 @@ class Connector:
 
         # setup database connection
         self._create_engine()
+        # query some infos about the current schema
+        self.tables = self._get_existing_tables()
 
     def insert(self, df: pd.DataFrame, table: str, key: str = None, **kwargs):
         """Generate a no of new flights and put them into the desired table."""
@@ -35,6 +37,14 @@ class Connector:
                                                                              self.password,
                                                                              self.database,
                                                                              self.schema))
+
+    def _get_existing_tables(self) -> list:
+        """Query the DB to get the names of all existing tables."""
+        sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = '{0}';".format(self.schema)
+        with self._cursor() as cursor:
+            tables = cursor.execute(sql)
+
+        return [table['TABLE_NAME'] for table in tables]
 
     @contextmanager
     def _cursor(self):
@@ -60,3 +70,12 @@ class Connector:
             data = list(df.to_records(index=False))
 
         return columns, data
+
+
+if __name__ == '__main__':
+    data = pd.read_csv('/Users/frankeschner/Documents/Projects/pandas-to-mysql/data2.csv', index_col=0)
+    con = Connector('127.0.0.1', 'root', '9W7G3WGLn48zdzpPQ92Y42d9', 'ads')
+
+# TODO: Autocreate missing tables
+# TODO: Autocreate missing columns (?)
+# TODO: Upsert stuff
