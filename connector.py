@@ -1,6 +1,12 @@
 from sqlalchemy import create_engine
 from contextlib import contextmanager
 import pandas as pd
+import numpy as np
+
+
+class MissingTableError(Exception):
+    """This error is raised when ever data should be handled inside a table that does not exist..."""
+    pass
 
 
 class Connector:
@@ -17,9 +23,15 @@ class Connector:
         # query some infos about the current schema
         self.tables = self._get_existing_tables()
 
-    def insert(self, df: pd.DataFrame, table: str, key: str = None, **kwargs):
+    def insert(self, df: pd.DataFrame, table: str, key: str = None, create: bool = True):
         """Generate a no of new flights and put them into the desired table."""
         columns, data = self._exploit_dataframe(df=df, key=key)
+
+        if table not in self.tables:
+            if create:
+                self.create_table(table=table, columns=columns, data=data)
+            else:
+                raise MissingTableError('{0} is not present in the schema {1}'.format(table, self.schema))
 
         # start constructing sql string
         sql = 'INSERT INTO {0} ('.format(table)
@@ -37,6 +49,17 @@ class Connector:
                                                                              self.password,
                                                                              self.database,
                                                                              self.schema))
+
+    def create_table(self, table: str, columns: list, data: list):
+        """Create a new table with columns"""
+        sql = 'CREATE TABLE {0}('.format(table)
+        dtypes = self._determine_dtypes(data)
+        for column, dtype in zip(columns, dtypes):
+            sql += column + ' ' + dtype + ', '
+        sql = sql[:-2] + ');'
+
+        with self._cursor() as cursor:
+            cursor.execute(sql)
 
     def _get_existing_tables(self) -> list:
         """Query the DB to get the names of all existing tables."""
@@ -59,7 +82,30 @@ class Connector:
                 raise e
 
     @staticmethod
-    def _exploit_dataframe(df: pd.DataFrame, key: str = None):
+    def _determine_dtypes(data: list) -> list:
+        """Determine the sql datatypes of the given data"""
+        row = idx = 0
+        dtypes = []
+        while idx < len(data[row]):
+            value = data[row][idx]
+            if value is None:
+                row += 1
+                continue
+            elif isinstance(value, np.integer):
+                dtypes += ['INTEGER']
+            elif isinstance(value, float):
+                if np.isnan(value):
+                    row += 1
+                    continue
+                else:
+                    dtypes += ['FLOAT']
+            else:  # everything is a varchar if you look hard enough!
+                dtypes += ['TEXT']
+            idx += 1
+        return dtypes
+
+    @staticmethod
+    def _exploit_dataframe(df: pd.DataFrame, key: str = None) -> (list, list):
         """Extract columns and data from dataframe"""
         # extract data and column names from dataframe
         if key:
@@ -73,9 +119,8 @@ class Connector:
 
 
 if __name__ == '__main__':
-    data = pd.read_csv('/Users/frankeschner/Documents/Projects/pandas-to-mysql/data2.csv', index_col=0)
+    motorcycles = pd.read_csv('/Users/frankeschner/Documents/Projects/pandas-to-mysql/data2.csv', index_col=0)
     con = Connector('127.0.0.1', 'root', '9W7G3WGLn48zdzpPQ92Y42d9', 'ads')
-
-# TODO: Autocreate missing tables
+    con.insert(df=motorcycles, table='ptasder', key='id', create=False)
 # TODO: Autocreate missing columns (?)
 # TODO: Upsert stuff
