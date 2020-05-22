@@ -23,15 +23,23 @@ class Connector:
         # query some infos about the current schema
         self.tables = self._get_existing_tables()
 
-    def insert(self, df: pd.DataFrame, table: str, key: str = None, create: bool = True):
+    def insert(self, df: pd.DataFrame, table: str, key: str = None, create_table: bool = True, create_columns: bool = True):
         """Generate a no of new flights and put them into the desired table."""
         columns, data = self._exploit_dataframe(df=df, key=key)
+        existing_columns = self._get_existing_columns(table=table)
 
         if table not in self.tables:
-            if create:
+            if create_table:
                 self.create_table(table=table, columns=columns, data=data)
             else:
                 raise MissingTableError('{0} is not present in the schema {1}'.format(table, self.schema))
+
+        new_columns = list(set(columns) - set(existing_columns))
+        missing_columns = list(set(existing_columns) - set(columns))
+
+        if create_columns:
+            for new_column in new_columns:
+                # TODO: ADD NEW COLUMN HERE
 
         # start constructing sql string
         sql = 'INSERT INTO {0} ('.format(table)
@@ -61,9 +69,18 @@ class Connector:
         with self._cursor() as cursor:
             cursor.execute(sql)
 
+    def _get_existing_columns(self, table: str) -> list:
+        """Query the DB to get the names of all existing columns in the table"""
+        sql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " \
+              "WHERE TABLE_SCHEMA = '{0}' AND TABLE_NAME  = '{1}';".format(self.schema, table)
+        with self._cursor() as cursor:
+            columns = cursor.execute(sql)
+
+        return [column['COLUMN_NAME'] for column in columns]
+
     def _get_existing_tables(self) -> list:
         """Query the DB to get the names of all existing tables."""
-        sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = '{0}';".format(self.schema)
+        sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{0}';".format(self.schema)
         with self._cursor() as cursor:
             tables = cursor.execute(sql)
 
@@ -121,6 +138,6 @@ class Connector:
 if __name__ == '__main__':
     motorcycles = pd.read_csv('/Users/frankeschner/Documents/Projects/pandas-to-mysql/data2.csv', index_col=0)
     con = Connector('127.0.0.1', 'root', '9W7G3WGLn48zdzpPQ92Y42d9', 'ads')
-    con.insert(df=motorcycles, table='ptasder', key='id', create=False)
+    con.insert(df=motorcycles, table='pter', key='id', create_table=False)
 # TODO: Autocreate missing columns (?)
 # TODO: Upsert stuff
