@@ -23,6 +23,15 @@ class Connector:
         # query some infos about the current schema
         self.tables = self._get_existing_tables()
 
+    def add_columns(self, table: str, columns: list, dtypes: list):
+        """Add new columns to given table"""
+        sql = "ALTER TABLE {0} ".format(table)
+        for column, dtype in zip(columns, dtypes):
+            sql += "ADD COLUMN {0} {1}, ".format(column, dtype)
+        sql = sql[:-2] + ";"
+        with self._cursor() as cursor:
+            cursor.execute(sql)
+
     def insert(self, df: pd.DataFrame, table: str, key: str = None, create_table: bool = True, create_columns: bool = True):
         """Generate a no of new flights and put them into the desired table."""
         columns, data = self._exploit_dataframe(df=df, key=key)
@@ -35,11 +44,12 @@ class Connector:
                 raise MissingTableError('{0} is not present in the schema {1}'.format(table, self.schema))
 
         new_columns = list(set(columns) - set(existing_columns))
-        missing_columns = list(set(existing_columns) - set(columns))
+        # missing_columns = list(set(existing_columns) - set(columns))
 
-        if create_columns:
-            for new_column in new_columns:
-                # TODO: ADD NEW COLUMN HERE
+        if create_columns and create_columns:
+            _, new_columns_data = self._exploit_dataframe(df=df[new_columns])
+            new_columns_dtypes = self._determine_dtypes(data=new_columns_data)
+            self.add_columns(table=table, columns=new_columns, dtypes=new_columns_dtypes)
 
         # start constructing sql string
         sql = 'INSERT INTO {0} ('.format(table)
@@ -138,6 +148,5 @@ class Connector:
 if __name__ == '__main__':
     motorcycles = pd.read_csv('/Users/frankeschner/Documents/Projects/pandas-to-mysql/data2.csv', index_col=0)
     con = Connector('127.0.0.1', 'root', '9W7G3WGLn48zdzpPQ92Y42d9', 'ads')
-    con.insert(df=motorcycles, table='pter', key='id', create_table=False)
-# TODO: Autocreate missing columns (?)
+    con.insert(df=motorcycles, table='pter', key='id', create_table=False, create_columns=True)
 # TODO: Upsert stuff
