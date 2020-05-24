@@ -32,7 +32,8 @@ class Connector:
         with self._cursor() as cursor:
             cursor.execute(sql)
 
-    def insert(self, df: pd.DataFrame, table: str, key: str = None, create_table: bool = True, create_columns: bool = True):
+    def insert(self, df: pd.DataFrame, table: str, key: str = None,
+               create_table: bool = True, create_columns: bool = True, update_row: bool = True):
         """Generate a no of new flights and put them into the desired table."""
         columns, data = self._exploit_dataframe(df=df, key=key)
         existing_columns = self._get_existing_columns(table=table)
@@ -46,7 +47,7 @@ class Connector:
         new_columns = list(set(columns) - set(existing_columns))
         # missing_columns = list(set(existing_columns) - set(columns))
 
-        if create_columns and create_columns:
+        if create_columns and new_columns:
             _, new_columns_data = self._exploit_dataframe(df=df[new_columns])
             new_columns_dtypes = self._determine_dtypes(data=new_columns_data)
             self.add_columns(table=table, columns=new_columns, dtypes=new_columns_dtypes)
@@ -57,7 +58,11 @@ class Connector:
 
         with self._cursor() as cursor:
             for dat in data:
-                order = sql + ', '.join(["'" + str(d) + "'" for d in dat]) + ');'
+                order = sql + ', '.join(["'" + str(d) + "'" for d in dat]) + ')'
+                if update_row:
+                    order += ' ON DUPLICATE KEY UPDATE '
+                    order += ', '.join(["{}='{}'".format(c, d) for c, d in zip(columns, dat)])
+                order += ';'
                 cursor.execute(order)
 
     def _create_engine(self):
@@ -149,4 +154,4 @@ if __name__ == '__main__':
     motorcycles = pd.read_csv('/Users/frankeschner/Documents/Projects/pandas-to-mysql/data2.csv', index_col=0)
     con = Connector('127.0.0.1', 'root', '9W7G3WGLn48zdzpPQ92Y42d9', 'ads')
     con.insert(df=motorcycles, table='pter', key='id', create_table=False, create_columns=True)
-# TODO: Upsert stuff
+# TODO: Handle PK creation
