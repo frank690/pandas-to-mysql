@@ -155,3 +155,4 @@ if __name__ == '__main__':
     con = Connector('127.0.0.1', 'root', '9W7G3WGLn48zdzpPQ92Y42d9', 'ads')
     con.insert(df=motorcycles, table='pter', key='id', create_table=False, create_columns=True)
 # TODO: Handle PK creation
+# TODO: Handle nan's because they overwrite preexisting values while upserting (since nan != None in DB).
